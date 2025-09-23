@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini Paint</title>
+<link rel="stylesheet" href="paint.css">
+</head>
+<body>
+
+<h1>Mini Paint</h1>
+
+<div id="toolbar">
+  <div class="tool active" data-tool="pencil">Pencil</div>
+  <div class="tool" data-tool="bucket">Bucket</div>
+  <div class="tool" data-tool="eraser">Eraser</div>
+  <div id="colors">
+    <div class="color" style="background:red;" data-color="red"></div>
+    <div class="color" style="background:blue;" data-color="blue"></div>
+    <div class="color" style="background:green;" data-color="green"></div>
+    <div class="color" style="background:yellow;" data-color="yellow"></div>
+    <div class="color" style="background:black;" data-color="black"></div>
+    <div class="color" style="background:white;" data-color="white"></div>
+  </div>
+</div>
+
+<canvas id="canvas" width="800" height="600"></canvas>
+
+<script src="paint.js"></script>
+</body>
+</html>
