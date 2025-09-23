@@ -1,0 +1,48 @@
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #f0f0f0;
+}
+
+#toolbar {
+  margin: 10px;
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.tool {
+  padding: 5px 10px;
+  cursor: pointer;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.tool.active {
+  border-color: #333;
+  font-weight: bold;
+}
+
+#colors {
+  display: flex;
+  gap: 5px;
+}
+
+.color {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  border: 1px solid #ccc;
+}
+
+canvas {
+  border: 1px solid #000;
+  background: #fff;
+  touch-action: none;
+  margin-top: 10px;
+}
