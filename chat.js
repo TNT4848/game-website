@@ -2,7 +2,7 @@ const messagesDiv = document.getElementById('messages');
 const input = document.getElementById('message-input');
 const sendBtn = document.getElementById('send-btn');
 
-const API_URL = 'https://php.kesug.com/chat.php'; // Your PHP URL
+const API_URL = 'https://php.kesug.com/chat.php?action=get'; // Your PHP URL
 
 async function fetchMessages() {
   try {
