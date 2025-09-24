@@ -2,8 +2,9 @@ const messagesDiv = document.getElementById('messages');
 const input = document.getElementById('message-input');
 const sendBtn = document.getElementById('send-btn');
 
-const API_URL = 'https://php.kesug.com/chat.php'; // Your PHP URL
+const API_URL = 'https://php.kesug.com/chat.php'; // PHP endpoint
 
+// Fetch messages
 async function fetchMessages() {
   try {
     const res = await fetch(`${API_URL}?action=get`);
@@ -20,11 +21,22 @@ async function fetchMessages() {
   }
 }
 
+// Send message
 async function sendMessage() {
   const message = input.value.trim();
   if (!message) return;
+
   try {
-    await fetch(`${API_URL}?action=send&message=${encodeURIComponent(message)}`);
+    await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({
+        action: 'send',
+        message: message
+      })
+    });
     input.value = '';
     fetchMessages();
   } catch (err) {
@@ -38,4 +50,4 @@ input.addEventListener('keydown', e => {
 });
 
 fetchMessages();
-setInterval(fetchMessages, 2000); // Refresh every 2 seconds
+setInterval(fetchMessages, 2000);
