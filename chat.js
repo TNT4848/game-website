@@ -1,53 +1,47 @@
-const messagesDiv = document.getElementById('messages');
-const input = document.getElementById('message-input');
-const sendBtn = document.getElementById('send-btn');
+<?php
+// CORS headers — must be at the top
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: GET, POST");
+header("Access-Control-Allow-Headers: Content-Type");
+header("Content-Type: application/json; charset=UTF-8");
 
-const API_URL = 'https://php.kesug.com/chat.php'; // PHP endpoint
+// Database credentials
+$host = "mysql.apexhosting.gdn";
+$user = "apexMC2653852";
+$pass = "y2fXcWQni2iqD5IWS^n@Nvp#";
+$db   = "apexMC2653852";
 
-// Fetch messages
-async function fetchMessages() {
-  try {
-    const res = await fetch(`${API_URL}?action=get`);
-    const data = await res.json();
-    messagesDiv.innerHTML = '';
-    data.forEach(msg => {
-      const div = document.createElement('div');
-      div.textContent = msg.message;
-      messagesDiv.appendChild(div);
-    });
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-  } catch (err) {
-    console.error('Failed to fetch messages', err);
-  }
+// Connect
+$conn = new mysqli($host, $user, $pass, $db);
+if ($conn->connect_error) die(json_encode(["error" => "DB connection failed"]));
+
+// Determine request method
+$method = $_SERVER['REQUEST_METHOD'];
+
+// GET: fetch messages
+if ($method === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get') {
+    $res = $conn->query("SELECT * FROM chat ORDER BY id ASC");
+    $messages = [];
+    while ($row = $res->fetch_assoc()) {
+        $messages[] = ["message" => $row['message']];
+    }
+    echo json_encode($messages);
 }
 
-// Send message
-async function sendMessage() {
-  const message = input.value.trim();
-  if (!message) return;
+// POST: send message
+if ($method === 'POST') {
+    // Read POST data
+    $action = $_POST['action'] ?? '';
+    $message = $_POST['message'] ?? '';
 
-  try {
-    await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        action: 'send',
-        message: message
-      })
-    });
-    input.value = '';
-    fetchMessages();
-  } catch (err) {
-    console.error('Failed to send message', err);
-  }
+    if ($action === 'send' && $message !== '') {
+        $stmt = $conn->prepare("INSERT INTO chat (message) VALUES (?)");
+        $stmt->bind_param("s", $message);
+        $stmt->execute();
+        $stmt->close();
+        echo json_encode(["success" => true]);
+    }
 }
 
-sendBtn.addEventListener('click', sendMessage);
-input.addEventListener('keydown', e => {
-  if(e.key === 'Enter') sendMessage();
-});
-
-fetchMessages();
-setInterval(fetchMessages, 2000);
+$conn->close();
+?>
