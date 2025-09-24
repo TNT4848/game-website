@@ -24,16 +24,14 @@ async function sendMessage() {
   const message = input.value.trim();
   if (!message) return;
   try {
-    await fetch(`${API_URL}?action=send`, {
-      method: 'POST',
-      body: new URLSearchParams({ message })
-    });
+    await fetch(`${API_URL}?action=send&message=${encodeURIComponent(message)}`);
     input.value = '';
     fetchMessages();
   } catch (err) {
     console.error('Failed to send message', err);
   }
 }
+
 
 sendBtn.addEventListener('click', sendMessage);
 input.addEventListener('keydown', e => {
