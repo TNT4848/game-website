@@ -13,17 +13,18 @@ h1 {
 }
 
 #game-container {
-  position: relative;
   width: 400px;
   height: 400px;
   background: #bbada0;
-  border-radius: 10px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 10px;
+  padding: 10px;
+  box-sizing: border-box;
 }
 
 .tile {
-  position: absolute;
-  width: 90px;
-  height: 90px;
   background: #ccc0b3;
   display: flex;
   align-items: center;
@@ -31,5 +32,4 @@ h1 {
   font-size: 2em;
   font-weight: bold;
   border-radius: 5px;
-  transition: all 0.2s;
 }
