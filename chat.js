@@ -2,7 +2,7 @@ const messagesDiv = document.getElementById('messages');
 const input = document.getElementById('message-input');
 const sendBtn = document.getElementById('send-btn');
 
-const API_URL = 'https://php.kesug.com/chat.php?action=get'; // Your PHP URL
+const API_URL = 'https://php.kesug.com/chat.php'; // Your PHP URL
 
 async function fetchMessages() {
   try {
@@ -31,7 +31,6 @@ async function sendMessage() {
     console.error('Failed to send message', err);
   }
 }
-
 
 sendBtn.addEventListener('click', sendMessage);
 input.addEventListener('keydown', e => {
