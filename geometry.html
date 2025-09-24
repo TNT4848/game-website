@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Mini Geometry Dash — More Obstacles</title>
+<style>
+html,body{margin:0;height:100%;display:flex;justify-content:center;align-items:center;background:#111}
+canvas{background:#7bd1ff;display:block;box-shadow:0 10px 30px rgba(0,0,0,0.5)}
+.info{position:fixed;top:10px;left:10px;color:white;font-family:sans-serif}
+</style>
+</head>
+<body>
+<div class="info">Click / Space to jump · R to restart</div>
+<canvas id="game" width="960" height="480"></canvas>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const W = canvas.width, H = canvas.height;
+const GROUND_Y = H-80;
+const GRAVITY = 0.7;
+const JUMP = -15;
+const SPEED = 5;
+
+const player = {x:160,y:0,w:48,h:48,vy:0,onGround:false,alive:true};
+let camX = 0, distance = 0;
+
+// Level: more obstacles
+const level = [
+{type:"platform", x:0, w:1200, y:GROUND_Y},
+
+// Pair 1
+{type:"spike", x:520, y:GROUND_Y-14},
+{type:"spike", x:532, y:GROUND_Y-14},
+
+// Gap
+{type:"gap", x:700, w:160},
+
+// Pair 2
+{type:"spike", x:950, y:GROUND_Y-14},
+{type:"spike", x:962, y:GROUND_Y-14},
+
+{type:"platform", x:1200, w:600, y:GROUND_Y},
+
+// Small block
+{type:"platform", x:1450, w:60, y:GROUND_Y-40},
+
+// Gap + floating platform
+{type:"gap", x:1550, w:220},
+{type:"platform", x:1620, w:80, y:GROUND_Y-100},
+
+// Pair 3
+{type:"spike", x:1780, y:GROUND_Y-14},
+{type:"spike", x:1792, y:GROUND_Y-14},
+
+{type:"platform", x:1850, w:600, y:GROUND_Y},
+
+// Tall block
+{type:"platform", x:2050, w:60, y:GROUND_Y-120},
+
+// Short block
+{type:"platform", x:2150, w:60, y:GROUND_Y-60},
+
+// Pair 4
+{type:"spike", x:2280, y:GROUND_Y-14},
+{type:"spike", x:2292, y:GROUND_Y-14},
+
+// Big gap
+{type:"gap", x:2400, w:300},
+
+// Floating chain
+{type:"platform", x:2720, w:80, y:GROUND_Y-100},
+{type:"platform", x:2840, w:80, y:GROUND_Y-160},
+{type:"platform", x:2960, w:80, y:GROUND_Y-100},
+
+// Final long platform
+{type:"platform", x:3100, w:1000, y:GROUND_Y}
+];
+
+function resetGame(){
+player.y = GROUND_Y - player.h;
+player.vy = 0;
+player.onGround = true;
+player.alive = true;
+camX = 0;
+distance = 0;
+}
+resetGame();
+
+// Input
+function jump(){ if(player.alive && player.onGround){ player.vy=JUMP; player.onGround=false; } }
+window.addEventListener('keydown', e=>{
+if(e.code==="Space"||e.code==="ArrowUp"||e.code==="KeyW"){ e.preventDefault(); jump(); }
+if(e.code==="KeyR"){ resetGame(); }
+});
+canvas.addEventListener('pointerdown', jump);
+
+// Update loop
+function update(){
+if(!player.alive) return;
+camX += SPEED;
+distance = Math.floor(camX);
+
+player.vy += GRAVITY;
+const prevY = player.y;
+player.y += player.vy;
+
+const px = camX + player.x;
+player.onGround = false;
+
+// Platforms
+for(const obj of level){
+if(obj.type==="platform"){
+if(px + player.w > obj.x && px < obj.x + obj.w){
+if(prevY + player.h <= obj.y && player.y + player.h >= obj.y){
+player.y = obj.y - player.h;
+player.vy = 0;
+player.onGround = true;
+}
+}
+}
+}
+
+// Default ground
+if(!player.onGround && prevY+player.h <= GROUND_Y && player.y+player.h >= GROUND_Y){
+player.y = GROUND_Y - player.h;
+player.vy = 0;
+player.onGround = true;
+}
+
+// Spikes & gaps
+for(const obj of level){
+if(obj.type==="spike"){
+const sx = obj.x;
+const dangerLeft = sx+3;
+const dangerRight = sx+7;
+const dangerBottomY = obj.y+6;
+if(px+player.w > dangerLeft && px < dangerRight && player.y+player.h > dangerBottomY){
+player.alive=false; break;
+}
+}
+if(obj.type==="gap"){
+if(px+player.w*0.1 >= obj.x && px+player.w*0.9 <= obj.x+obj.w && player.y+player.h > GROUND_Y+6){
+player.alive=false; break;
+}
+}
+}
+}
+
+// Draw loop
+function draw(){
+ctx.clearRect(0,0,W,H);
+
+// Ground
+ctx.fillStyle="#2b9348";
+ctx.fillRect(0,GROUND_Y,W,H-GROUND_Y);
+
+// Level objects
+for(const obj of level){
+const sx = obj.x - camX;
+if(obj.type==="platform"){
+ctx.fillStyle="#2b9348";
+ctx.fillRect(sx,obj.y,obj.w,H-obj.y);
+} else if(obj.type==="spike"){
+ctx.fillStyle="#ff3b3b";
+ctx.beginPath();
+ctx.moveTo(sx,obj.y+14);
+ctx.lineTo(sx+5,obj.y);
+ctx.lineTo(sx+10,obj.y+14);
+ctx.closePath();
+ctx.fill();
+} else if(obj.type==="gap"){
+ctx.fillStyle="#87ceeb";
+ctx.fillRect(sx,GROUND_Y,obj.w,H-GROUND_Y);
+}
+}
+
+// Player
+ctx.fillStyle = player.alive?"#ffb259":"#666";
+ctx.fillRect(player.x, player.y, player.w, player.h);
+
+// HUD
+ctx.fillStyle="black";
+ctx.font="18px sans-serif";
+ctx.fillText("Distance: "+Math.floor((camX+player.x)/10),18,30);
+if(!player.alive){
+ctx.fillStyle="red";
+ctx.font="32px sans-serif";
+ctx.fillText("GAME OVER - Press R", 180,H/2);
+}
+}
+
+function loop(){ update(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>
