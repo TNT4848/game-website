@@ -6,11 +6,14 @@ function drawGrid() {
   tiles.forEach(val => {
     const div = document.createElement('div');
     div.classList.add('tile');
+    div.style.width = '80px';
+    div.style.height = '80px';
     if(val !== 0) div.textContent = val;
     grid.appendChild(div);
   });
 }
 
+// The rest of your game code (addRandomTile, slide, move, keydown, etc.) stays the same
 function addRandomTile() {
   let empty = tiles.map((v,i) => v===0 ? i : -1).filter(i => i!==-1);
   if(empty.length === 0) return;
