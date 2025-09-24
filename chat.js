@@ -1,56 +1,39 @@
 const API_URL = "https://php.kesug.com/chat.php";
 
-// Fetch messages from server
+// Get messages
 async function fetchMessages() {
   try {
-    const response = await fetch(`${API_URL}?action=get`);
-    if (!response.ok) throw new Error("Network error while fetching messages");
+    const res = await fetch(`${API_URL}?action=get`);
+    const data = await res.json();
 
-    const messages = await response.json();
-
-    const messagesDiv = document.getElementById("messages");
-    messagesDiv.innerHTML = ""; // clear old messages
-
-    messages.forEach(msg => {
+    const div = document.getElementById("messages");
+    div.innerHTML = "";
+    data.forEach(m => {
       const p = document.createElement("p");
-      p.textContent = msg.message;
-      messagesDiv.appendChild(p);
+      p.textContent = m.message;
+      div.appendChild(p);
     });
-  } catch (err) {
-    console.error("Failed to fetch messages", err);
+  } catch (e) {
+    console.error("Fetch failed", e);
   }
 }
 
-// Send a message to server
+// Send messages
 async function sendMessage() {
   const input = document.getElementById("message-input");
-  const message = input.value.trim();
-  if (!message) return;
+  const msg = input.value.trim();
+  if (!msg) return;
 
   try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        action: "send",
-        message: message
-      })
-    });
-
-    if (!response.ok) throw new Error("Network error while sending message");
-
-    input.value = ""; // clear box
-    fetchMessages();  // refresh messages
-  } catch (err) {
-    console.error("Failed to send message", err);
+    const res = await fetch(`${API_URL}?action=send&message=${encodeURIComponent(msg)}`);
+    await res.json();
+    input.value = "";
+    fetchMessages();
+  } catch (e) {
+    console.error("Send failed", e);
   }
 }
 
-// Attach event listener
 document.getElementById("send-btn").addEventListener("click", sendMessage);
-
-// Load messages every 2 seconds
 setInterval(fetchMessages, 2000);
-
-// Load first time immediately
 fetchMessages();
