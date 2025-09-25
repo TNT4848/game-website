@@ -122,8 +122,8 @@
       if (this.isPlayer){
         forward += (keys['ArrowUp'] || keys['w'])?1:0;
         forward -= (keys['ArrowDown'] || keys['s'])?1:0;
-        turn += (keys['ArrowLeft'] || keys['a'])? -1:0;
-        turn += (keys['ArrowRight'] || keys['d'])? 1:0;
+        turn += (keys['ArrowLeft'] || keys['d'])? -1:0;
+        turn += (keys['ArrowRight'] || keys['a'])? 1:0;
       } else {
         // AI handled separately
       }
