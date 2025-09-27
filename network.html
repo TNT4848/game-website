@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Network Switch Simulator</title>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #1e1e1e;
+  color: #fff;
+  text-align: center;
+  padding: 20px;
+}
+#packet-buttons {
+  margin-bottom: 30px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+.packet-btn {
+  background: linear-gradient(135deg,#2196F3,#21CBF3);
+  border: none;
+  color: white;
+  font-weight: bold;
+  padding: 12px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+}
+.packet-btn:hover { transform: translateY(-2px); }
+.packet-btn:active { transform: translateY(1px); }
+
+#network {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 50px;
+  position: relative;
+}
+
+.port {
+  width: 80px;
+  height: 80px;
+  background: #333;
+  border-radius: 8px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.port.connected::after {
+  content: '';
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  top: 5px;
+  right: 5px;
+  background: lime;
+  animation: blink 1s infinite;
+}
+@keyframes blink {
+  0%,50%,100% {opacity:1;}
+  25%,75% {opacity:0;}
+}
+.port-label { position: absolute; bottom: -20px; width: 100%; text-align:center; font-size:14px; color:#fff; }
+
+#canvas-cables { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+</style>
+</head>
+<body>
+
+<h1>💻 Network Switch Simulator</h1>
+
+<div id="packet-buttons">
+  <button class="packet-btn" onclick="sendPacket('all')">Send Packet to All</button>
+  <button class="packet-btn" onclick="sendPacket('dev1')">PC1</button>
+  <button class="packet-btn" onclick="sendPacket('dev2')">PC2</button>
+  <button class="packet-btn" onclick="sendPacket('dev3')">PC3</button>
+  <button class="packet-btn" onclick="sendPacket('dev4')">PC4</button>
+  <button class="packet-btn" onclick="sendPacket('dev5')">PC5</button>
+  <button class="packet-btn" onclick="sendPacket('dev6')">PC6</button>
+  <button class="packet-btn" onclick="sendPacket('dev7')">PC7</button>
+  <button class="packet-btn" onclick="sendPacket('dev8')">PC8</button>
+</div>
+
+<div id="network">
+  <canvas id="canvas-cables"></canvas>
+  <div class="port" id="router"><div class="port-label">Router</div></div>
+  <div class="port" id="uplink"><div class="port-label">Uplink</div></div>
+  <div class="port" id="dev1"><div class="port-label">PC1</div></div>
+  <div class="port" id="dev2"><div class="port-label">PC2</div></div>
+  <div class="port" id="dev3"><div class="port-label">PC3</div></div>
+  <div class="port" id="dev4"><div class="port-label">PC4</div></div>
+  <div class="port" id="dev5"><div class="port-label">PC5</div></div>
+  <div class="port" id="dev6"><div class="port-label">PC6</div></div>
+  <div class="port" id="dev7"><div class="port-label">PC7</div></div>
+  <div class="port" id="dev8"><div class="port-label">PC8</div></div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas-cables');
+const ctx = canvas.getContext('2d');
+canvas.width = canvas.offsetWidth;
+canvas.height = canvas.offsetHeight;
+
+const router = document.getElementById('router');
+const uplink = document.getElementById('uplink');
+const devices = Array.from(document.querySelectorAll('.port:not(#router):not(#uplink)'));
+
+let selectedPort = null;
+
+// Connection state
+const connections = {
+  routerToUplink: false,
+  uplinkToDevices: {} // devID: true/false
+};
+devices.forEach(d => connections.uplinkToDevices[d.id] = false);
+
+// Helpers
+function getCenter(el) {
+  const rect = el.getBoundingClientRect();
+  const canvasRect = canvas.getBoundingClientRect();
+  return { x: rect.left - canvasRect.left + rect.width/2, y: rect.top - canvasRect.top + rect.height/2 };
+}
+
+function drawCables() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = 'yellow';
+  ctx.lineWidth = 3;
+
+  if(connections.routerToUplink) drawLine(router, uplink);
+  devices.forEach(d => { if(connections.uplinkToDevices[d.id]) drawLine(uplink, d); });
+}
+
+function drawLine(a,b){
+  const from = getCenter(a);
+  const to = getCenter(b);
+  ctx.beginPath();
+  ctx.moveTo(from.x,from.y);
+  ctx.lineTo(to.x,to.y);
+  ctx.stroke();
+}
+
+// Port click logic
+document.querySelectorAll('.port').forEach(port=>{
+  port.addEventListener('click', ()=>{
+    if(!selectedPort){
+      selectedPort = port;
+    } else {
+      // connecting router -> uplink
+      if((selectedPort===router && port===uplink)||(selectedPort===uplink && port===router)){
+        connections.routerToUplink = !connections.routerToUplink; // toggle connection
+        router.classList.toggle('connected', connections.routerToUplink);
+        uplink.classList.toggle('connected', connections.routerToUplink);
+      }
+      // connecting uplink -> device
+      else if((selectedPort===uplink && devices.includes(port))||(port===uplink && devices.includes(selectedPort))){
+        const dev = selectedPort===uplink ? port : selectedPort;
+        connections.uplinkToDevices[dev.id] = !connections.uplinkToDevices[dev.id]; // toggle
+        dev.classList.toggle('connected', connections.uplinkToDevices[dev.id]);
+      } else {
+        alert("Invalid connection!");
+      }
+      selectedPort = null;
+      drawCables();
+    }
+  });
+});
+
+// Packet sending
+function sendPacket(target){
+  if(!connections.routerToUplink){ alert("Router offline!"); return; }
+
+  if(target==='all'){
+    devices.forEach(d=>{ if(connections.uplinkToDevices[d.id]) flashDevice(d); });
+  } else {
+    const d = document.getElementById(target);
+    if(connections.uplinkToDevices[target]) flashDevice(d);
+    else alert(`${d.querySelector('.port-label').textContent} not connected!`);
+  }
+}
+
+// Flash animation
+function flashDevice(device){
+  const old = device.style.background;
+  device.style.background='#00f';
+  setTimeout(()=>{ device.style.background=old; },300);
+}
+
+drawCables();
+</script>
+
+</body>
+</html>
