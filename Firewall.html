@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Firewall Defender Game (Network Accurate Flow)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Chivo:wght@700&family=Inter:wght@400;700&display=swap');
+    body {
+        font-family: 'Inter', sans-serif;
+        background-color: #1a1a2e; /* Dark purple background */
+        overflow: hidden;
+    }
+    #game-container {
+        width: 100%;
+        max-width: 800px;
+        height: 80vh;
+        max-height: 600px;
+        margin: 5vh auto;
+        position: relative;
+        background: #2e2e4e; /* Slightly lighter purple */
+        border: 4px solid #4a4a7d;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+    #firewall-device {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 160px;
+        height: 60px;
+        background: #000;
+        border: 3px solid #6c5ce7;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 10px;
+        box-shadow: 0 0 15px rgba(108, 92, 231, 0.7);
+        z-index: 10;
+    }
+    .port-label {
+        font-family: 'Chivo', sans-serif;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 700;
+    }
+    /* Packet Styling */
+    .packet {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: opacity 0.3s;
+        z-index: 5;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+    }
+    .packet-good { background-color: #00b894; } /* Green */
+    .packet-bad { background-color: #d63031; } /* Red */
+
+    /* Animation Path */
+    @keyframes moveFromWan {
+        from { left: 0; }
+        to { left: calc(50% - 80px); } /* Stops just before the Firewall WAN port */
+    }
+    @keyframes moveToLan {
+        from { left: calc(50% + 80px); } /* Starts just after the Firewall LAN port */
+        to { left: 100%; }
+    }
+
+    .moving-wan {
+        animation: moveFromWan linear forwards;
+    }
+    .moving-lan {
+        animation: moveToLan linear forwards;
+    }
+
+    /* Result Messages */
+    .result-message {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-family: 'Chivo', sans-serif;
+        font-size: 3rem;
+        font-weight: 700;
+        text-shadow: 2px 2px #000;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.5s;
+        z-index: 20;
+    }
+</style>
+</head>
+<body class="p-4">
+
+<div id="game-container">
+    <div id="score-board" class="absolute top-4 left-4 text-white text-xl font-bold bg-gray-700 p-2 rounded-lg shadow-md">
+        Score: <span id="score">0</span>
+    </div>
+    
+    <!-- The Firewall Device -->
+    <div id="firewall-device">
+        <span class="port-label">WAN (Internet)</span>
+        <span class="port-label">LAN (Internal)</span>
+    </div>
+
+    <!-- Buttons -->
+    <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-6">
+        <button id="allow-button" class="px-8 py-3 bg-green-500 text-white font-bold rounded-lg shadow-lg hover:bg-green-600 transition duration-150 transform hover:scale-105">
+            Allow (Space)
+        </button>
+        <button id="deny-button" class="px-8 py-3 bg-red-500 text-white font-bold rounded-lg shadow-lg hover:bg-red-600 transition duration-150 transform hover:scale-105">
+            Deny (Enter)
+        </button>
+    </div>
+
+    <div id="message" class="result-message"></div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const gameContainer = document.getElementById('game-container');
+        const scoreElement = document.getElementById('score');
+        const allowButton = document.getElementById('allow-button');
+        const denyButton = document.getElementById('deny-button');
+        const messageElement = document.getElementById('message');
+
+        let score = 0;
+        let activePacket = null;
+        let packetSpawnInterval = 1500; // Initial speed (milliseconds)
+        let animationDuration = 3000; // Time for packet to reach firewall (milliseconds)
+
+        // --- Game State Functions ---
+
+        /**
+         * Updates the score and the display.
+         * @param {number} points - Points to add (can be negative).
+         */
+        function updateScore(points) {
+            score += points;
+            scoreElement.textContent = score;
+        }
+
+        /**
+         * Shows a temporary or permanent message in the center of the screen.
+         * @param {string} text - The message content.
+         * @param {string} color - CSS color code.
+         */
+        function showMessage(text, color) {
+            messageElement.textContent = text;
+            messageElement.style.color = color;
+            messageElement.style.opacity = 1;
+            setTimeout(() => {
+                messageElement.style.opacity = 0;
+            }, 1000);
+        }
+
+        // --- Packet Generation ---
+
+        function createPacket() {
+            const isBad = Math.random() < 0.35; // 35% chance of being a bad packet
+            const packet = document.createElement('div');
+            
+            packet.classList.add('packet', isBad ? 'packet-bad' : 'packet-good', 'moving-wan');
+            packet.dataset.isBad = isBad;
+            
+            // Randomize vertical position (y-axis)
+            const yPos = Math.random() * (gameContainer.clientHeight - 40) + 10;
+            packet.style.top = `${yPos}px`;
+            
+            // Set animation properties
+            packet.style.animationDuration = `${animationDuration / 1000}s`;
+            
+            gameContainer.appendChild(packet);
+            activePacket = packet;
+
+            // Detect when the packet hits the Firewall (end of the animation)
+            const timeoutDuration = animationDuration - 100; // 100ms early detection
+            
+            setTimeout(() => {
+                if (activePacket === packet) {
+                    // This packet reached the Firewall without being processed (MISS)
+                    activePacket.remove();
+                    activePacket = null;
+                    updateScore(-2);
+                    showMessage("Missed! (-2)", '#ffcc00'); 
+                }
+            }, timeoutDuration);
+            
+            // Speed up the game over score milestones
+            if (score >= 10 && score % 10 === 0 && animationDuration > 1000) {
+                animationDuration -= 100;
+                packetSpawnInterval -= 50;
+                // Restart spawner with new interval
+                clearInterval(packetSpawner);
+                packetSpawner = setInterval(createPacket, packetSpawnInterval);
+            }
+        }
+
+        let packetSpawner = setInterval(createPacket, packetSpawnInterval);
+
+        // --- User Interaction ---
+
+        function processPacket(action) {
+            if (!activePacket) return;
+
+            // Use a local reference and clear global activePacket immediately
+            const packetToProcess = activePacket; 
+            activePacket = null;
+
+            const isBad = packetToProcess.dataset.isBad === 'true';
+            let points = 0;
+            let message = "";
+            let color = "";
+            let handled = true;
+            let packetDropped = true; // Assume drop unless explicitly allowed
+
+            if (action === 'ALLOW') {
+                if (!isBad) {
+                    // Correct: Allowed Good
+                    points = 1;
+                    message = "Allowed! (+1)";
+                    color = '#00b894';
+                    packetDropped = false; // Packet successfully flows
+                } else {
+                    // Incorrect: Allowed Bad
+                    points = -2;
+                    message = "BAD Passed! (-2)";
+                    color = '#d63031';
+                    // packetDropped remains true
+                }
+            } else if (action === 'DENY') {
+                // Deny action always results in a drop
+                if (isBad) {
+                    // Correct: Denied Bad
+                    points = 1;
+                    message = "Denied! (+1)";
+                    color = '#00b894';
+                } else {
+                    // Incorrect: Denied Good
+                    points = -2;
+                    message = "Good Blocked! (-2)";
+                    color = '#d63031';
+                }
+                // packetDropped remains true
+            }
+
+            // Apply the flow logic based on the outcome
+            if (!packetDropped) {
+                // Packet flows to the LAN side
+                
+                // 1. Setup LAN exit animation
+                packetToProcess.style.animation = 'none'; // Clear WAN animation
+                packetToProcess.offsetHeight; // Trigger reflow
+                packetToProcess.classList.remove('moving-wan');
+                packetToProcess.classList.add('moving-lan');
+                packetToProcess.style.animationDuration = `${animationDuration / 1000 / 2}s`; // Faster exit
+
+                // 2. Clean up packet after it leaves the screen
+                setTimeout(() => {
+                    packetToProcess.remove(); // Use the local reference for cleanup
+                }, animationDuration / 2);
+
+            } else {
+                // Packet is dropped/deleted
+                packetToProcess.remove();
+            }
+
+            if (handled) {
+                updateScore(points);
+                showMessage(message, color);
+            }
+        }
+
+        // --- Event Listeners ---
+
+        allowButton.addEventListener('click', () => processPacket('ALLOW'));
+        denyButton.addEventListener('click', () => processPacket('DENY'));
+
+        // Keyboard support (Space for Allow, Enter for Deny)
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                processPacket('ALLOW');
+            } else if (e.code === 'Enter') {
+                e.preventDefault();
+                processPacket('DENY');
+            }
+        });
+
+        // Initial instructions
+        showMessage("Filter Packets: Allow Good, Deny Bad", '#6c5ce7');
+    });
+</script>
+</body>
+</html>
