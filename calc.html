@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scientific Calculator</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: #222;
+    color: #fff;
+  }
+
+  .calculator {
+    background: #333;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+  }
+
+  #display {
+    width: 100%;
+    height: 50px;
+    margin-bottom: 10px;
+    font-size: 1.5rem;
+    text-align: right;
+    padding: 10px;
+    border-radius: 6px;
+    border: none;
+  }
+
+  .buttons {
+    display: grid;
+    grid-template-columns: repeat(6, 60px);
+    grid-gap: 10px;
+  }
+
+  button {
+    padding: 15px;
+    font-size: 1rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    background: #555;
+    color: #fff;
+    transition: background 0.2s;
+  }
+
+  button:hover {
+    background: #666;
+  }
+
+  .operator {
+    background: #f0a500;
+  }
+
+  .operator:hover {
+    background: #e59400;
+  }
+
+  .function {
+    background: #007acc;
+  }
+
+  .function:hover {
+    background: #005fa3;
+  }
+
+  .wide {
+    grid-column: span 2;
+  }
+</style>
+</head>
+<body>
+
+<div class="calculator">
+  <input type="text" id="display" disabled>
+  <div class="buttons">
+    <!-- Numbers -->
+    <button onclick="appendNumber('7')">7</button>
+    <button onclick="appendNumber('8')">8</button>
+    <button onclick="appendNumber('9')">9</button>
+    <button class="operator" onclick="appendOperator('/')">/</button>
+    <button class="function" onclick="calculateTrig('sin')">sin</button>
+    <button class="function" onclick="calculateTrig('cos')">cos</button>
+
+    <button onclick="appendNumber('4')">4</button>
+    <button onclick="appendNumber('5')">5</button>
+    <button onclick="appendNumber('6')">6</button>
+    <button class="operator" onclick="appendOperator('*')">*</button>
+    <button class="function" onclick="calculateTrig('tan')">tan</button>
+    <button class="function" onclick="calculateTrig('log')">log</button>
+
+    <button onclick="appendNumber('1')">1</button>
+    <button onclick="appendNumber('2')">2</button>
+    <button onclick="appendNumber('3')">3</button>
+    <button class="operator" onclick="appendOperator('-')">-</button>
+    <button class="function" onclick="convertBinary()">bin</button>
+    <button class="function" onclick="convertHex()">hex</button>
+
+    <button onclick="appendNumber('0')">0</button>
+    <button onclick="appendNumber('.')">.</button>
+    <button class="operator" onclick="appendOperator('**')">^</button>
+    <button class="operator" onclick="appendOperator('+')">+</button>
+    <button class="function" onclick="calculate()">=</button>
+    <button class="function" onclick="clearDisplay()">C</button>
+  </div>
+</div>
+
+<script>
+const display = document.getElementById('display');
+
+function appendNumber(num) {
+  display.value += num;
+}
+
+function appendOperator(op) {
+  display.value += op;
+}
+
+function clearDisplay() {
+  display.value = '';
+}
+
+function calculate() {
+  try {
+    display.value = eval(display.value);
+  } catch {
+    display.value = 'Error';
+  }
+}
+
+// Trig and log functions
+function calculateTrig(func) {
+  try {
+    let val = parseFloat(display.value);
+    if (isNaN(val)) return;
+    switch(func) {
+      case 'sin': display.value = Math.sin(val); break;
+      case 'cos': display.value = Math.cos(val); break;
+      case 'tan': display.value = Math.tan(val); break;
+      case 'log': display.value = Math.log10(val); break;
+    }
+  } catch {
+    display.value = 'Error';
+  }
+}
+
+// Binary/Hex conversion
+function convertBinary() {
+  try {
+    let val = parseInt(display.value);
+    display.value = val.toString(2);
+  } catch {
+    display.value = 'Error';
+  }
+}
+
+function convertHex() {
+  try {
+    let val = parseInt(display.value);
+    display.value = val.toString(16).toUpperCase();
+  } catch {
+    display.value = 'Error';
+  }
+}
+</script>
+
+</body>
+</html>
