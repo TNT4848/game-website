@@ -2,7 +2,7 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
 let bird = {x:50, y:300, vy:0};
-const gravity = 0.1;
+const gravity = 0.01;
 const jump = -10;
 
 let pipes = [];
