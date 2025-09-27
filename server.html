@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Server Rack Simulator (Custom Connection Rules)</title>
+<style>
+body { font-family: sans-serif; margin:0; padding:0; display:flex; flex-direction:column; align-items:center; background:#222; color:#eee;}
+h1 { margin:20px;}
+#rack-container { position:relative; width:500px; height:640px; border:2px solid #555; margin-bottom:20px; }
+.unit { border-bottom:1px solid #555; height:40px; display:flex; align-items:center; justify-content:center; position:relative; background:#333; font-size:12px;}
+.device { background:#444; height:36px; width:480px; display:flex; align-items:center; justify-content:space-between; padding:0 5px; position:absolute; top:0; left:0; border:1px solid #666; box-sizing:border-box; cursor:default; font-size:12px;}
+.device span { color:#fff;}
+.device .name { pointer-events:none; }
+.device .remove { color:#f55; cursor:pointer; font-weight:bold; }
+.ports { display:flex; gap:3px; }
+.port { width:24px; height:24px; background:#666; border:1px solid #999; border-radius:3px; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#fff; font-size:10px; font-weight:bold; }
+.port.uplink { background:#555; border:1px solid #aaa; }
+.port.wan { background: #f88; }
+.port.lan { background: #8f8; }
+#canvas { pointer-events:none; z-index:0; }
+#menu { position:absolute; background:#333; border:1px solid #555; padding:10px; display:none; flex-direction:column; gap:5px; z-index:10;}
+#menu button { padding:5px 10px; cursor:pointer; }
+</style>
+</head>
+<body>
+<h1>Server Rack Simulator (Custom Connection Rules)</h1>
+<div id="rack-container"></div>
+<canvas id="canvas"></canvas> 
+<div id="menu">
+  <button data-type="server">Add Server</button>
+  <button data-type="switch">Add Switch</button>
+  <button data-type="router">Add Router</button>
+  <button data-type="firewall">Add Firewall</button>
+</div>
+<script>
+const rack = document.getElementById('rack-container');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+/**
+ * Updates the canvas size to match the rack and positions it exactly over the rack.
+ */
+function updateCanvasPosition() {
+    const rackRect = rack.getBoundingClientRect();
+    canvas.width = rack.clientWidth;
+    canvas.height = rack.clientHeight;
+    // Position the canvas absolutely on top of the rack's viewport position
+    canvas.style.position = 'absolute';
+    canvas.style.top = rackRect.top + 'px';
+    canvas.style.left = rackRect.left + 'px';
+}
+
+// Initial position and size setup
+updateCanvasPosition(); 
+
+const menu = document.getElementById('menu');
+let selectedUnit = null;
+const devices = [];
+const connections = [];
+let portSelection = null; 
+
+function createRack() {
+  for(let i=0;i<16;i++){
+    const unit = document.createElement('div');
+    unit.classList.add('unit');
+    unit.dataset.unit=i;
+    unit.textContent = `U${16-i}`;
+    rack.appendChild(unit);
+  }
+}
+
+function showMenu(unitEl, x, y){
+  if(devices.some(d=>d.unit==unitEl.dataset.unit)) return;
+  menu.style.display='flex';
+  menu.style.top=y+'px';
+  menu.style.left=x+'px';
+  selectedUnit = unitEl;
+}
+
+function hideMenu(){
+  menu.style.display='none';
+  selectedUnit=null;
+}
+
+function addDevice(type){
+  const unitNum = parseInt(selectedUnit.dataset.unit);
+  const el = document.createElement('div');
+  el.classList.add('device');
+  el.dataset.unit = unitNum;
+  el.dataset.type = type;
+
+  const removeBtn = document.createElement('span');
+  removeBtn.classList.add('remove');
+  removeBtn.textContent='✖';
+  removeBtn.onclick = (e)=>{
+    e.stopPropagation();
+    removeDevice(unitNum);
+  };
+
+  const nameSpan = document.createElement('span');
+  nameSpan.classList.add('name'); 
+  nameSpan.textContent = type.toUpperCase();
+
+  const portsDiv = document.createElement('div');
+  portsDiv.classList.add('ports');
+
+  let portCount = 8;
+  let hasUplink = false;
+  const customPorts = [];
+
+  if(type==='router') portCount=1;
+  else if(type==='switch'){ portCount=7; hasUplink=true; }
+  else if(type==='firewall'){
+    portCount=0;
+    customPorts.push({ label: 'W', class: 'wan' });
+    customPorts.push({ label: 'L', class: 'lan' });
+  }
+
+  for(let i=0;i<portCount;i++){
+    const p = document.createElement('div');
+    p.classList.add('port');
+    p.dataset.port=i+1;
+    p.textContent = i+1;
+    p.onclick = (e)=>{ selectPort(el,p); e.stopPropagation(); }
+    portsDiv.appendChild(p);
+  }
+  
+  // Add custom ports for Firewall
+  customPorts.forEach(portInfo => {
+    const p = document.createElement('div');
+    p.classList.add('port', portInfo.class);
+    p.dataset.port = portInfo.label;
+    p.textContent = portInfo.label;
+    p.onclick = (e)=>{ selectPort(el,p); e.stopPropagation(); }
+    portsDiv.appendChild(p);
+  });
+
+  if(hasUplink){
+    const uplink = document.createElement('div');
+    uplink.classList.add('port','uplink');
+    uplink.dataset.port='U';
+    uplink.textContent='U';
+    uplink.onclick = (e)=>{ selectPort(el,uplink); e.stopPropagation(); }
+    portsDiv.appendChild(uplink);
+  }
+
+  el.appendChild(nameSpan);
+  el.appendChild(portsDiv);
+  el.appendChild(removeBtn);
+
+  el.style.top = (selectedUnit.offsetTop+2)+'px';
+  el.style.left = '10px';
+
+  rack.appendChild(el);
+  devices.push({el,type,unit:unitNum,ports:portsDiv.querySelectorAll('.port')});
+  hideMenu();
+  drawConnections();
+}
+
+/**
+ * Removes a device from the rack by its unit number, removes all associated cables,
+ * and clears portSelection if the device was the source of a cable connection in progress.
+ */
+function removeDevice(unitNum){
+  const index = devices.findIndex(d=>d.unit===unitNum);
+  if(index > -1){
+    const dev = devices[index];
+    rack.removeChild(dev.el);
+    devices.splice(index,1);
+
+    // Remove connections involving this device
+    for(let i=connections.length-1;i>=0;i--){
+      if(connections[i].from.unit===unitNum || connections[i].to.unit===unitNum) {
+            connections.splice(i,1);
+        }
+    }
+
+    // Clear port selection if a port on this device was selected for a new cable
+    if (portSelection && parseInt(portSelection.device.dataset.unit) === unitNum) {
+        portSelection = null;
+    }
+    
+    drawConnections();
+  }
+}
+
+rack.addEventListener('click',(e)=>{
+  if(e.target.classList.contains('unit')){
+    showMenu(e.target,e.clientX,e.clientY);
+  } else hideMenu();
+});
+
+menu.querySelectorAll('button').forEach(b=>{
+  b.onclick=()=>addDevice(b.dataset.type);
+});
+
+/**
+ * Helper function to remove a specific cable from the connections array.
+ * @param {number} unitNum - The unit number of the device.
+ * @param {string} portId - The port's data-port value.
+ * @returns {boolean} True if a cable was removed.
+ */
+function removeCableAtPort(unitNum, portId) {
+    for (let i = connections.length - 1; i >= 0; i--) {
+        const c = connections[i];
+        const isFromPort = c.from.unit === unitNum && c.from.port === portId;
+        const isToPort = c.to.unit === unitNum && c.to.port === portId;
+        
+        if (isFromPort || isToPort) {
+            connections.splice(i, 1);
+            return true; 
+        }
+    }
+    return false;
+}
+
+function selectPort(deviceEl, portEl){
+  // 1. Get port/device info
+  const currentUnit = parseInt(deviceEl.dataset.unit);
+  const currentPort = portEl.dataset.port;
+  const currentType = deviceEl.dataset.type;
+  
+  // 2. Handle second port selection
+  if (portSelection) {
+      // Check for double-click deselect
+      if (portSelection.port === portEl) {
+          portSelection = null;
+          return;
+      }
+
+      // Get the first port's details
+      const fromUnit = parseInt(portSelection.device.dataset.unit);
+      const fromPort = portSelection.port.dataset.port;
+      const fromType = portSelection.device.dataset.type;
+      const toType = currentType;
+      
+      // --- NEW: Cable Removal Logic ---
+      // Determine if cable removal should be allowed for these device types
+      const allowCableRemoval = (fromType === 'server' || fromType === 'switch') || (toType === 'server' || toType === 'switch');
+      
+      let removedCable = false;
+
+      if (allowCableRemoval) {
+          // If removal is allowed, attempt to remove existing cables on both ports
+          const removedFrom = removeCableAtPort(fromUnit, fromPort);
+          const removedTo = removeCableAtPort(currentUnit, currentPort);
+          removedCable = removedFrom || removedTo;
+      }
+      
+      // --- CONNECTION RULES ---
+      let valid = false;
+
+      // 1. Block all same-device type connections
+      if (fromType === toType) {
+          valid = false;
+      } 
+      // 2. Servers and Switches can connect to anything (except themselves, handled above)
+      else if (fromType === 'server' || fromType === 'switch' || toType === 'server' || toType === 'switch') {
+          valid = true;
+      }
+      // 3. Router/Firewall Rule: Allow connection only if they are the *only* devices left
+      // This enforces that the Router and Firewall are strictly isolated from Server/Switch.
+      else if (
+          (fromType === 'router' && toType === 'firewall') ||
+          (fromType === 'firewall' && toType === 'router')
+      ) {
+          // You must connect the Router to the Firewall's WAN/LAN ports for this to work
+          const isRouterToFirewall = 
+                (fromType === 'router' && toType === 'firewall' && (currentPort === 'W' || currentPort === 'L'));
+          const isFirewallToRouter = 
+                (fromType === 'firewall' && (fromPort === 'W' || fromPort === 'L') && toType === 'router');
+          
+          if (isRouterToFirewall || isFirewallToRouter) {
+              valid = true;
+          }
+      }
+
+
+      if(valid){
+        connections.push({
+          from:{unit:fromUnit, port:fromPort},
+          to:{unit:currentUnit, port:currentPort}
+        });
+      }
+      
+      portSelection = null;
+      drawConnections();
+      
+  } else {
+      // 3. First port selection
+      
+      // --- NEW: If a port is clicked for the first time, remove its existing cable ONLY if it's a Server or Switch ---
+      const allowCableRemoval = (currentType === 'server' || currentType === 'switch');
+
+      if(allowCableRemoval && removeCableAtPort(currentUnit, currentPort)) {
+          drawConnections();
+          return; // If we just removed a cable, don't start a new selection, just clear the port.
+      }
+      
+      // If no cable was removed (or if it was a Router/Firewall), start the new connection process
+      portSelection={device:deviceEl, port:portEl};
+  }
+}
+
+/**
+ * Draws all connections on the canvas.
+ */
+function drawConnections(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Get the canvas's position relative to the viewport once
+  const canvasRect = canvas.getBoundingClientRect();
+  const canvasOffsetX = canvasRect.left;
+  const canvasOffsetY = canvasRect.top;
+
+  connections.forEach(c=>{
+    // Find the element in the DOM based on the stored unit number
+    const fromDevice = devices.find(d=>d.unit===c.from.unit);
+    const toDevice = devices.find(d=>d.unit===c.to.unit);
+
+    // Skip if device no longer exists
+    if (!fromDevice || !toDevice) return;
+    
+    const fromDeviceEl = fromDevice.el;
+    const toDeviceEl = toDevice.el;
+
+    const fromPorts = fromDeviceEl.querySelectorAll('.port');
+    const toPorts = toDeviceEl.querySelectorAll('.port');
+
+    const fromPort = [...fromPorts].find(p=>p.dataset.port==c.from.port);
+    const toPort = [...toPorts].find(p=>p.dataset.port==c.to.port);
+
+    // Skip if port no longer exists
+    if (!fromPort || !toPort) return;
+
+    // Get the port's position relative to the viewport.
+    const fromPortRect = fromPort.getBoundingClientRect();
+    const toPortRect = toPort.getBoundingClientRect();
+
+    // Calculate the start coordinates relative to the canvas (Viewport Pos - Canvas Viewport Pos + half port size)
+    const startX = fromPortRect.left - canvasOffsetX + fromPort.offsetWidth/2;
+    const startY = fromPortRect.top - canvasOffsetY + fromPort.offsetHeight/2;
+
+    // Calculate the end coordinates relative to the canvas
+    const endX = toPortRect.left - canvasOffsetX + toPort.offsetWidth/2;
+    const endY = toPortRect.top - canvasOffsetY + toPort.offsetHeight/2;
+
+    ctx.strokeStyle='#ccc';
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(startX,startY);
+    ctx.lineTo(endX,endY);
+    ctx.stroke();
+  });
+}
+
+window.addEventListener('resize',()=>{
+  updateCanvasPosition(); // Recalculate canvas position on resize
+  drawConnections();
+});
+
+createRack();
+</script>
+</body>
+</html>
