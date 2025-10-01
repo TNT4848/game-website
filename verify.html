@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Login</title>
+  <style>
+    body { font-family: Arial; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    input { display: block; margin: 10px 0; padding: 5px; }
+  </style>
+</head>
+<body>
+  <div>
+    <h2>Login</h2>
+    <input type="text" id="username" placeholder="Username">
+    <input type="password" id="password" placeholder="Password">
+    <button onclick="checkLogin()">Login</button>
+    <p id="error" style="color:red;"></p>
+  </div>
+
+  <script>
+    function checkLogin() {
+      const user = document.getElementById('username').value;
+      const pass = document.getElementById('password').value;
+
+      // Set your username and password here
+      const correctUser = "myUser";
+      const correctPass = "myPass";
+
+      if(user === correctUser && pass === correctPass) {
+        // Redirect to main page
+        window.location.href = "index.html";
+      } else {
+        document.getElementById('error').innerText = "Incorrect username or password!";
+      }
+    }
+  </script>
+</body>
+</html>
