@@ -24,10 +24,15 @@
       // Set your username and password here
       const correctUser = "admin";
       const correctPass = "hyprland";
+      const usert = "user";
+      const passt = "passt";
 
       if(user === correctUser && pass === correctPass) {
         // Redirect to main page
         window.location.href = "index-main.html";
+      } else 
+      if (user === usert && pass === passt) {
+         window.location.href = "index-user.html";
       } else {
         document.getElementById('error').innerText = "Incorrect username or password!";
       }
