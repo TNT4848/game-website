@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Flight Sim 🚀</title>
+<style>
+body { margin: 0; overflow: hidden; background: #87ceeb; }
+#hud {
+  position: absolute; top: 8px; left: 8px; color: #fff; font-family: monospace;
+  background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px;
+}
+#instructions {
+  position: absolute; right: 8px; top: 8px; color:#fff;
+  background:rgba(0,0,0,0.25); padding:8px; border-radius:6px;
+  font-family: sans-serif; display: none;
+}
+#overlay {
+  position: absolute; top:0; left:0; right:0; bottom:0;
+  display:flex; align-items:center; justify-content:center;
+  background: rgba(0,0,0,0.6); color:white; font-size:24px;
+  cursor:pointer; user-select:none;
+}
+#crashMsg {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  font-size: 40px; color: red; font-weight: bold; display: none;
+  text-shadow: 2px 2px 8px black;
+}
+</style>
+</head>
+<body>
+<div id="hud">Throttle: 0%<br>Speed: 0 m/s<br>Altitude: 0 m<br>Weapon: Minigun<br>
+Press <b>P</b> to Respawn
+</div>
+<div id="instructions">
+S : Pitch Up<br>
+W : Pitch Down<br>
+A/D : Roll<br>
+1 : Yaw Left<br>
+2 : Yaw Right<br>
+R/F : Throttle Up/Down<br>
+Space : Fire Weapon<br>
+Q : Switch Weapon<br>
+H : Toggle Controls
+</div>
+<div id="overlay">Click to Start</div>
+<div id="crashMsg">💥 CRASHED!</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.min.js"></script>
+<script>
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x87ceeb, 0.0006);
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 100000);
+camera.position.set(0, 5, -15);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Lights
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.9));
+const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+dir.position.set(-100,200,100);
+scene.add(dir);
+
+// Ground
+const groundMat = new THREE.MeshLambertMaterial({color:0x2d8f2d});
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(20000,20000), groundMat);
+ground.rotation.x = -Math.PI/2;
+scene.add(ground);
+
+// Grid
+const gridHelper = new THREE.GridHelper(20000, 200, 0x000000, 0x555555);
+scene.add(gridHelper);
+
+// Plane
+const plane = new THREE.Group();
+const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,4,8), new THREE.MeshPhongMaterial({color:0xffaa00}));
+fus.rotation.z = Math.PI/2; plane.add(fus);
+const wing = new THREE.Mesh(new THREE.BoxGeometry(6,0.15,1.5), new THREE.MeshPhongMaterial({color:0x888888})); plane.add(wing);
+const tail = new THREE.Mesh(new THREE.BoxGeometry(1.2,0.15,1), new THREE.MeshPhongMaterial({color:0x888888}));
+tail.position.set(-1.7,0.7,0); plane.add(tail);
+const prop = new THREE.Mesh(new THREE.BoxGeometry(0.1,2,0.04), new THREE.MeshPhongMaterial({color:0x333333}));
+prop.position.set(2.2,0,0); plane.add(prop);
+plane.scale.set(1.5,1.5,1.5); scene.add(plane);
+
+// Towers
+let towerDistance = 1200; 
+const towerGeometry = new THREE.BoxGeometry(10,200,10);
+function createTower(x,z){
+  const material = new THREE.MeshPhongMaterial({color:0x888888});
+  const mesh = new THREE.Mesh(towerGeometry,material);
+  mesh.position.set(x,100,z);
+  mesh.userData.bbox = new THREE.Box3().setFromObject(mesh);
+  scene.add(mesh);
+  return {mesh, debris: []};
+}
+let towers = [createTower(towerDistance-15,-10), createTower(towerDistance+15,10)];
+
+// Projectiles
+const projectiles = [];
+
+const state = {
+  pos: new THREE.Vector3(0,30,0),
+  vel: new THREE.Vector3(40,0,0),
+  quat: new THREE.Quaternion(),
+  throttle: 0.5,
+  mass: 1200,
+  wingArea:16,
+  liftCoeff0:0.2,
+  liftSlope:5.0,
+  dragCoeff:0.02,
+  airDensity:1.225,
+  crashed:false,
+  weaponIndex:0,
+  weaponNames:['Minigun','Rockets','Bombs'],
+  ammo:[250,15,8]
+};
+state.quat.setFromEuler(new THREE.Euler(0,0,0));
+
+const camOffset = new THREE.Vector3(-15,6,0);
+const keys = {};
+let controlsActive=false;
+
+const overlay=document.getElementById("overlay");
+const instructionsBox=document.getElementById("instructions");
+const crashMsg=document.getElementById("crashMsg");
+const hud=document.getElementById("hud");
+
+overlay.addEventListener("click",()=>{
+  controlsActive=true;
+  overlay.style.display="none";
+  crashMsg.style.display="none";
+  window.addEventListener('keydown', e=>{
+    keys[e.key.toLowerCase()]=true;
+    if(e.key.toLowerCase()==='h') instructionsBox.style.display = instructionsBox.style.display==="none"?"block":"none";
+    if(e.key.toLowerCase()==='q') state.weaponIndex=(state.weaponIndex+1)%3;
+    if(e.key===' ') fireWeapon();
+    if(e.key.toLowerCase()==='p') resetPlane();
+  });
+  window.addEventListener('keyup', e=>{keys[e.key.toLowerCase()]=false;});
+});
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+function forwardVector(q){return new THREE.Vector3(1,0,0).applyQuaternion(q).normalize();}
+function upVector(q){return new THREE.Vector3(0,1,0).applyQuaternion(q).normalize();}
+
+function resetPlane(){
+  state.pos.set(0,30,0);
+  state.vel.set(40,0,0);
+  state.quat.setFromEuler(new THREE.Euler(0,0,0));
+  state.throttle=0.5;
+  state.crashed=false;
+  state.ammo=[250,15,8];
+  crashMsg.style.display="none";
+  projectiles.length=0;
+  towers.forEach(t=>{
+    if(!t.mesh) t.mesh=createTower(towerDistance-15, -10).mesh;
+    t.mesh.material.color.set(0x888888);
+    t.debris.forEach(d=>scene.remove(d));
+    t.debris=[];
+  });
+}
+
+function fireWeapon(){
+  if(state.crashed) return;
+  if(state.ammo[state.weaponIndex]<=0) return;
+  state.ammo[state.weaponIndex]--;
+  const dir=forwardVector(state.quat).clone();
+  const pos=state.pos.clone().add(dir.clone().multiplyScalar(5));
+  projectiles.push({
+    pos,dir,
+    speed:state.weaponIndex===0?500:state.weaponIndex===1?300:200,
+    mesh:createProjectileMesh(pos,state.weaponIndex===0?0xffff00:state.weaponIndex===1?0xff0000:0x0000ff)
+  });
+}
+
+function createProjectileMesh(pos,color){
+  const geom=new THREE.SphereGeometry(0.5,6,6);
+  const mat=new THREE.MeshBasicMaterial({color});
+  const mesh=new THREE.Mesh(geom,mat);
+  mesh.position.copy(pos);
+  scene.add(mesh);
+  return mesh;
+}
+
+function createDebris(pos){
+  const geom=new THREE.BoxGeometry(2,2,2);
+  const mat=new THREE.MeshPhongMaterial({color:0x888888});
+  const mesh=new THREE.Mesh(geom,mat);
+  mesh.position.copy(pos);
+  mesh.userData.vel=new THREE.Vector3((Math.random()-0.5)*5,Math.random()*5+2,(Math.random()-0.5)*5);
+  scene.add(mesh);
+  return mesh;
+}
+
+function explodeTower(t){
+  if(!t.mesh) return;
+  for(let d=0; d<30; d++) t.debris.push(createDebris(t.mesh.position.clone()));
+  scene.remove(t.mesh);
+  t.mesh=null;
+  towers.forEach(other=>{if(other!==t) explodeTower(other);});
+}
+
+let last=performance.now();
+function animate(now){
+  const dt=Math.min(0.05,(now-last)/1000);
+  last=now;
+
+  if(controlsActive && !state.crashed){
+    const pitchInput=(keys['w']?1:0)-(keys['s']?1:0);
+    const rollInput=(keys['d']?1:0)-(keys['a']?1:0);
+    const yawInput=(keys['1']?1:0)-(keys['2']?1:0); // Yaw on 1/2 keys
+
+    if(keys['r']) state.throttle=Math.min(1,state.throttle+dt*0.3);
+    if(keys['f']) state.throttle=Math.max(0,state.throttle-dt*0.3);
+
+    const pitchRate=1.1*pitchInput;
+    const rollRate=1.1*rollInput;
+    const yawRate=1.1*yawInput;
+    const dq=new THREE.Quaternion().setFromEuler(new THREE.Euler(pitchRate*dt,yawRate*dt,rollRate*dt));
+    state.quat.multiply(dq).normalize();
+
+    const forward=forwardVector(state.quat);
+    const speed=state.vel.length();
+    state.vel.copy(forward.multiplyScalar(speed));
+  }
+
+  if(!state.crashed){
+    const forward=forwardVector(state.quat);
+    const speed=state.vel.length();
+    const velDir=state.vel.clone().normalize();
+    let aoa=0;
+    if(speed>1e-3){ aoa=Math.asin(upVector(state.quat).dot(velDir)*-1); aoa=Math.max(-Math.PI/6, Math.min(Math.PI/3, aoa)); }
+    const Cl=state.liftCoeff0+state.liftSlope*aoa;
+    const lift=0.5*state.airDensity*speed*speed*state.wingArea*Cl;
+    const liftForce=upVector(state.quat).clone().multiplyScalar(lift);
+    const thrust=forward.clone().multiplyScalar(state.throttle*5000);
+    const drag=state.vel.clone().multiplyScalar(-state.dragCoeff*speed);
+    const gravity=new THREE.Vector3(0,-9.81*state.mass,0);
+    const totalForce=new THREE.Vector3().add(liftForce).add(thrust).add(drag).add(gravity);
+    const accel=totalForce.clone().multiplyScalar(1/state.mass);
+    state.vel.add(accel.multiplyScalar(dt));
+    state.pos.add(state.vel.clone().multiplyScalar(dt));
+
+    // Bounding boxes
+    const planeBBox = new THREE.Box3().setFromObject(plane);
+
+    if(state.pos.y<=1){state.crashed=true; crashMsg.style.display="block";}
+
+    towers.forEach(t=>{
+      if(t.mesh){
+        t.mesh.userData.bbox.setFromObject(t.mesh);
+        if(planeBBox.intersectsBox(t.mesh.userData.bbox)){ explodeTower(t); state.crashed=true; crashMsg.style.display="block"; }
+      }
+    });
+
+    plane.position.copy(state.pos); plane.quaternion.copy(state.quat);
+    prop.rotation.x+=speed*dt*0.2;
+
+    const camWorldOffset=camOffset.clone().applyQuaternion(state.quat);
+    const desiredCamPos=state.pos.clone().add(camWorldOffset);
+    camera.position.lerp(desiredCamPos,1-Math.pow(0.001,dt));
+    camera.lookAt(state.pos.clone().add(forward.clone().multiplyScalar(20)));
+
+    // Projectiles
+    for(let i=projectiles.length-1;i>=0;i--){
+      const p=projectiles[i];
+      p.pos.add(p.dir.clone().multiplyScalar(p.speed*dt));
+      p.mesh.position.copy(p.pos);
+      towers.forEach(t=>{
+        if(t.mesh && t.mesh.userData.bbox.containsPoint(p.pos)){ 
+          explodeTower(t); 
+          scene.remove(p.mesh); 
+          projectiles.splice(i,1);
+        }
+      });
+      if(p.pos.distanceTo(state.pos)>5000){ scene.remove(p.mesh); projectiles.splice(i,1); }
+    }
+
+    towers.forEach(t=>{ t.debris.forEach(d=>{ d.position.add(d.userData.vel.clone().multiplyScalar(dt)); d.userData.vel.add(new THREE.Vector3(0,-9.81*dt,0)); if(d.position.y<0)d.position.y=0; }); });
+  }
+
+  hud.innerHTML=`Throttle: ${Math.round(state.throttle*100)}%<br>
+                 Speed: ${Math.round(state.vel.length())} m/s<br>
+                 Altitude: ${Math.round(state.pos.y)} m<br>
+                 Weapon: ${state.weaponNames[state.weaponIndex]}<br>
+                 Ammo: ${state.ammo[state.weaponIndex]}<br>
+                 Press <b>P</b> to Respawn`;
+
+  requestAnimationFrame(animate);
+  renderer.render(scene,camera);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
